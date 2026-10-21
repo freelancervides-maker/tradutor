@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1118">
+<meta name="format-detection" content="telephone=no">
+<title>Vítor Tradutor</title>
+<style>
+:root{--bg:#0b1118;--card:#16202b;--card2:#1d2a38;--tx:#eef3f8;--mut:#9fb0c1;--acc:#4cc9b0;--red:#e5484d;--blue:#3b82f6}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+button,select,.out,h1{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+button{cursor:pointer;font-family:inherit}
+#diag{font-size:12px;color:#9fb0c1;background:#101922;border-radius:10px;padding:8px 10px;margin:0 0 10px;line-height:1.4}
+#diag b.ok{color:#4cc9b0}#diag b.bad{color:#ff8a8a}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+body{padding:max(12px,env(safe-area-inset-top)) 14px max(16px,env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+h1{font-size:20px;margin:4px 0 10px;display:flex;justify-content:space-between;align-items:center}
+h1 small{font-size:12px;color:var(--mut);font-weight:400}
+.warn{background:#4b2a12;color:#ffd9b8;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;display:none}
+label{display:block;font-size:13px;color:var(--mut);margin:0 0 4px}
+select{width:100%;padding:14px 12px;font-size:18px;border-radius:12px;border:1px solid #2b3a4a;background:var(--card);color:var(--tx)}
+.out{background:var(--card);border-radius:18px;padding:16px;margin:12px 0;min-height:150px;position:relative}
+.out .lbl{font-size:12px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase}
+#dst{font-size:34px;line-height:1.25;font-weight:650;margin:8px 0 10px;word-break:break-word}
+#src{font-size:16px;color:var(--mut);word-break:break-word}
+#state{font-size:15px;color:var(--acc);min-height:20px;margin-top:6px}
+.out.big{position:fixed;inset:0;z-index:50;margin:0;border-radius:0;display:flex;flex-direction:column;justify-content:center;padding:24px}
+.out.big #dst{font-size:clamp(40px,11vw,76px)}
+#close{display:none;position:absolute;top:12px;right:12px;background:#2b3a4a;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:16px}
+.out.big #close{display:block}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}
+.talk{border:0;border-radius:20px;padding:22px 8px;font-size:20px;font-weight:700;color:#fff;min-height:112px;line-height:1.2}
+.talk small{display:block;font-size:13px;font-weight:500;opacity:.85;margin-top:6px}
+#me{background:var(--blue)}#them{background:#8b5cf6}
+.talk.on{background:var(--red)!important;animation:p 1s infinite}
+@keyframes p{50%{opacity:.7}}
+.row{display:flex;gap:10px;align-items:center;margin:8px 0}
+.row label{margin:0;color:var(--tx);font-size:15px}
+input[type=checkbox]{width:24px;height:24px}
+h2{font-size:15px;color:var(--mut);margin:18px 0 8px}
+.ph{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ph button{background:var(--card2);color:var(--tx);border:1px solid #2b3a4a;border-radius:12px;padding:12px 10px;font-size:15px;text-align:left;min-height:58px}
+#hist div{padding:8px 0;border-bottom:1px solid #243242;font-size:15px}
+#hist .d{font-size:19px}#hist .s{color:var(--mut);font-size:13px}
+.tools{display:flex;gap:10px;margin-top:6px}
+.tools button{flex:1;background:var(--card2);color:var(--tx);border:1px solid #2b3a4a;border-radius:12px;padding:12px;font-size:15px}
+</style>
+</head>
+<body>
+<h1>Vítor Tradutor <small>v1.1 · telemóvel</small></h1>
+<div id="diag"></div>
+<div id="warn" class="warn"></div>
+
+<label for="lang">LÍNGUA DA OUTRA PESSOA</label>
+<select id="lang"></select>
+
+<div class="out" id="out">
+  <button id="close">✕ Fechar</button>
+  <div class="lbl" id="lbl">Tradução (toca aqui para mostrar em ecrã grande)</div>
+  <div id="dst" dir="auto">—</div>
+  <div id="src" dir="auto"></div>
+  <div id="state"></div>
+</div>
+
+<div class="btns">
+  <button class="talk" id="me">🎤 FALO EU<small>português → língua escolhida</small></button>
+  <button class="talk" id="them">🎤 ELES FALAM<small>língua escolhida → português</small></button>
+</div>
+
+<div class="row"><input type="checkbox" id="speak" checked><label for="speak">Dizer a tradução em voz alta</label></div>
+<div class="tools"><button id="again">🔊 Repetir</button><button id="copy">📋 Copiar</button></div>
+
+<h2>FRASES RÁPIDAS (oficina · bomba de gasolina)</h2>
+<div class="ph" id="ph"></div>
+
+<h2>ÚLTIMAS TRADUÇÕES</h2>
+<div id="hist"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DG={js:'✓',err:'',touch:'—',rec:'—',last:'—'};
+function showDiag(){const d=document.getElementById('diag');if(!d)return;
+ const ua=navigator.userAgent,ch=(ua.match(/Chrome\/(\d+)/)||[])[1],wv=/; wv\)/.test(ua)||!ch;
+ d.innerHTML='Página: <b class="ok">'+DG.js+' ativa</b> · '+(ch?'Chrome '+ch:'<b class="bad">não é o Chrome</b>')+(wv?' <b class="bad">(janela interna?)</b>':'')+
+ ' · reconhecimento de voz: <b class="'+(window.SpeechRecognition||window.webkitSpeechRecognition?'ok':'bad')+'">'+((window.SpeechRecognition||window.webkitSpeechRecognition)?'sim':'NÃO')+'</b>'+
+ ' · voz falada: <b class="'+(window.speechSynthesis?'ok':'bad')+'">'+(window.speechSynthesis?'sim':'NÃO')+'</b> · '+(location.protocol==='https:'?'https':location.protocol==='file:'?'ficheiro':location.protocol)+
+ '<br>Toque: <b>'+DG.touch+'</b> · Último passo: <b>'+DG.last+'</b>'+(DG.err?'<br><b class="bad">ERRO: '+DG.err+'</b>':'')}
+window.addEventListener('error',e=>{DG.err=(e.message||'erro')+(e.lineno?' (linha '+e.lineno+')':'');showDiag()});
+window.addEventListener('unhandledrejection',e=>{DG.err='promessa: '+(e.reason&&e.reason.message||e.reason);showDiag()});
+document.addEventListener('pointerdown',e=>{const b=e.target.closest&&e.target.closest('button,select');DG.touch=b?('recebido em '+(b.id||b.tagName)):'recebido (fora de botões)';showDiag()},true);
+showDiag();
+/* [código de tradução, nome, língua do reconhecimento de voz] */
+const LANGS=[
+ ['en','English','en-US'],['ar','العربية — Emirados / Árabe','ar-AE'],['ar','العربية — Síria / Levante','ar-SY'],
+ ['ur','اردو — Paquistão (Urdu)','ur-PK'],['hi','हिन्दी — Índia (Hindi)','hi-IN'],['tl','Filipino / Tagalo','fil-PH'],
+ ['bn','বাংলা — Bengali','bn-BD'],['fa','فارسی — Persa','fa-IR'],['fr','Français','fr-FR'],['de','Deutsch','de-DE'],
+ ['es','Español','es-ES'],['it','Italiano','it-IT'],['nl','Nederlands','nl-NL'],['pl','Polski','pl-PL'],['ru','Русский','ru-RU'],
+ ['tr','Türkçe','tr-TR'],['id','Bahasa Indonesia','id-ID'],['zh-CN','中文 (Mandarim)','zh-CN'],['ja','日本語','ja-JP'],
+ ['ko','한국어','ko-KR'],['sw','Kiswahili','sw-KE']
+];
+const PHRASES=[
+ 'Bom dia. Pode ajudar-me, por favor?','Quero encher o depósito.','Quanto custa?','Pode verificar o óleo?',
+ 'O carro não pega.','Tenho um pneu furado.','Os travões fazem barulho.','O ar condicionado não arrefece.',
+ 'Quanto tempo demora?','Pode dar-me um orçamento?','Posso pagar com cartão?','Pode escrever o preço?',
+ 'Obrigado, muito obrigado.','Não percebo. Pode repetir mais devagar?'
+];
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,busy=false,lastText='',lastLang='',cache={};
+try{cache=JSON.parse(localStorage.getItem('vt_cache')||'{}')}catch{}
+function saveCache(){try{const k=Object.keys(cache);if(k.length>300)for(const x of k.slice(0,100))delete cache[x];localStorage.setItem('vt_cache',JSON.stringify(cache))}catch{}}
+
+/* ---- avisos / língua ---- */
+if(location.protocol==='file:'){const w=$('warn');w.style.display='block';w.textContent='Esta página está aberta como ficheiro: o Chrome pode pedir o microfone sempre que carregas. Para ficar guardado, abre-a por um endereço https (vê o LEIA-ME).'}
+if(!SR){const w=$('warn');w.style.display='block';w.textContent='Este navegador não tem reconhecimento de voz. Abre no Chrome do Android. As frases rápidas funcionam na mesma.'}
+$('lang').innerHTML=LANGS.map((l,i)=>`<option value="${i}">${l[1]}</option>`).join('');
+try{const v=localStorage.getItem('vt_lang');if(v!==null&&LANGS[+v])$('lang').value=v}catch{}
+$('lang').onchange=()=>{try{localStorage.setItem('vt_lang',$('lang').value)}catch{};cache=cache}
+const L=()=>LANGS[+$('lang').value];
+$('ph').innerHTML=PHRASES.map((p,i)=>`<button data-i="${i}">${p}</button>`).join('');
+$('ph').onclick=e=>{const b=e.target.closest('button');if(b)run(PHRASES[+b.dataset.i],'pt',L()[0],'me',false)};
+
+/* ---- tradução ---- */
+async function translate(text,from,to){
+ const key=from+'>'+to+'|'+text;if(cache[key])return cache[key];
+ const ac=new AbortController(),to_=setTimeout(()=>ac.abort(),9000);
+ try{const u='https://translate.googleapis.com/translate_a/single?client=gtx&sl='+encodeURIComponent(from)+'&tl='+encodeURIComponent(to)+'&dt=t&q='+encodeURIComponent(text);
+  const r=await fetch(u,{signal:ac.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const y=j[0].map(x=>x[0]).join('');cache[key]=y;saveCache();return y}
+ finally{clearTimeout(to_)}
+}
+
+/* ---- voz (síntese) ---- */
+function pickVoice(lang){const base=lang.split('-')[0].toLowerCase(),vs=window.speechSynthesis?speechSynthesis.getVoices():[];
+ return vs.find(v=>v.lang.toLowerCase().replace('_','-')===lang.toLowerCase())||vs.find(v=>v.lang.toLowerCase().startsWith(base))||null}
+function say(text,lang){
+ if(!$('speak').checked||!text)return;
+ if(!window.speechSynthesis){$('state').textContent='Este navegador não sabe falar — mostra o texto.';return}
+ const v=pickVoice(lang),vs=speechSynthesis.getVoices();
+ if(!v&&vs.length){$('state').textContent='Este telemóvel não tem voz para esta língua — mostra o texto.';return}
+ const u=new SpeechSynthesisUtterance(text);if(v)u.voice=v;u.lang=lang;speechSynthesis.cancel();speechSynthesis.speak(u)
+}
+
+/* ---- fluxo ---- */
+async function run(text,from,to,dir,fromVoice){
+ busy=true;lastLang=null;DG.last='a traduzir';showDiag();
+ $('src').textContent=text;$('dst').textContent='…';$('state').textContent='A traduzir…';
+ try{const y=await translate(text,from,to);$('dst').textContent=y;$('state').textContent='';lastText=y;DG.last='traduzido ✓';showDiag();
+  const l=L(),outLang=dir==='me'?l[2]:'pt-PT';lastLang=outLang;
+  addHist(text,y);say(y,outLang)}
+ catch(e){$('dst').textContent='—';$('state').textContent='Sem ligação à internet ou o serviço de tradução falhou. Tenta outra vez.'}
+ busy=false;
+}
+function addHist(a,b){const d=document.createElement('div');d.innerHTML='<div class="d"></div><div class="s"></div>';d.firstChild.textContent=b;d.lastChild.textContent=a;d.firstChild.dir='auto';$('hist').prepend(d);while($('hist').children.length>8)$('hist').lastChild.remove()}
+
+function listen(dir){DG.last='toque em '+(dir==='me'?'FALO EU':'ELES FALAM');showDiag();
+ if(!SR){$('state').textContent='Sem reconhecimento de voz neste navegador.';return}
+ if(rec){try{rec.abort()}catch{}rec=null;setOn(null);return}
+ if(busy)return;
+ try{window.speechSynthesis&&speechSynthesis.cancel()}catch{}
+ const l=L(),from=dir==='me'?'pt':l[0],to=dir==='me'?l[0]:'pt',loc=dir==='me'?'pt-PT':l[2];
+ const r=new SR();rec=r;r.lang=loc;r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+ let finalText='',gotAny=false,errName='';
+ r.onstart=()=>{DG.last='microfone ligado';showDiag();setOn(dir);$('state').textContent='A ouvir… fala agora';$('dst').textContent='…';$('src').textContent=''};
+ r.onresult=e=>{DG.last='a receber voz';showDiag();gotAny=true;let f='',i='';for(let n=e.resultIndex;n<e.results.length;n++){if(e.results[n].isFinal)f+=e.results[n][0].transcript;else i+=e.results[n][0].transcript}
+  if(f)finalText=f;$('src').textContent=(f||i)};
+ r.onerror=e=>{errName=e.error;DG.last='erro do microfone: '+e.error;showDiag()};
+ r.onend=()=>{setOn(null);if(rec===r)rec=null;
+  const t=finalText.trim()||(gotAny?$('src').textContent.trim():'');
+  if(t){run(t,from,to,dir,true);return}
+  if(errName==='not-allowed'||errName==='service-not-allowed')$('state').textContent='Microfone bloqueado. Toca no cadeado junto ao endereço e permite o microfone.';
+  else if(errName==='network')$('state').textContent='Sem internet para o reconhecimento de voz.';
+  else if(errName==='language-not-supported')$('state').textContent='Este telemóvel não reconhece esta língua. Escreve ou usa as frases rápidas.';
+  else if(errName==='aborted')$('state').textContent='';
+  else $('state').textContent='Não ouvi nada. Toca e fala logo a seguir.';
+  if(!t)$('dst').textContent='—'};
+ try{r.start()}catch(e){setOn(null);rec=null;$('state').textContent='Não consegui ligar o microfone: '+(e.message||e.name)}
+}
+function setOn(dir){$('me').classList.toggle('on',dir==='me');$('them').classList.toggle('on',dir==='them');
+ $('me').firstChild.nodeValue=dir==='me'?'■ A OUVIR… (toca para parar)':'🎤 FALO EU';$('them').firstChild.nodeValue=dir==='them'?'■ A OUVIR… (toca para parar)':'🎤 ELES FALAM'}
+$('me').addEventListener('click',()=>listen('me'));$('them').addEventListener('click',()=>listen('them'));
+
+/* ---- extras ---- */
+$('out').onclick=e=>{if(e.target.id==='close'){$('out').classList.remove('big');return}if(lastText&&!$('out').classList.contains('big'))$('out').classList.add('big')};
+$('again').onclick=()=>{if(lastText&&lastLang)say(lastText,lastLang)};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(lastText);$('state').textContent='Copiado.'}catch{$('state').textContent='Não consegui copiar.'}};
+try{if(window.speechSynthesis)speechSynthesis.onvoiceschanged=()=>{}}catch{}
+try{if('wakeLock' in navigator)navigator.wakeLock.request('screen').catch(()=>{})}catch{}
+window.__t={run,listen};
+</script>
+</body>
+</html>
